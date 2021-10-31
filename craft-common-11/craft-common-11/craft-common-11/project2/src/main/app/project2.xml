@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:dw="http://www.mulesoft.org/schema/mule/ee/dw" xmlns:json="http://www.mulesoft.org/schema/mule/json" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:spring="http://www.springframework.org/schema/beans" 
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/json http://www.mulesoft.org/schema/mule/json/current/mule-json.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/ee/dw http://www.mulesoft.org/schema/mule/ee/dw/current/dw.xsd">
+    <http:listener-config name="HTTP_Listener_Configuration" host="0.0.0.0" port="8081" basePath="message" doc:name="HTTP Listener Configuration"/>
+    <http:listener-config name="HTTP_Listener_Configuration1" host="localhost" port="8081" basePath="/test" doc:name="HTTP Listener Configuration"/>
+    <http:request-config name="HTTP_Request_Configuration" host="localhost" port="8081" basePath="/test" doc:name="HTTP Request Configuration"/>
+    <http:request-config name="HTTP_Request_Configuration1" host="localhost" port="8082" doc:name="HTTP Request Configuration"/>
+    <http:listener-config name="HTTP_Listener_Configuration2" host="localhost" port="8082" doc:name="HTTP Listener Configuration"/>
+    <flow name="project2Flow">
+        <http:listener config-ref="HTTP_Listener_Configuration" path="/" doc:name="HTTP"/>
+        <json:json-to-object-transformer returnClass="java.util.ArrayList" doc:name="JSON to Object"/>
+        <foreach collection="#[payload]" doc:name="For Each">
+            <enricher source="#[payload]" target="#[flowVars.counter]" doc:name="Message Enricher">
+                <http:request config-ref="HTTP_Request_Configuration1" path="/test" method="GET" doc:name="HTTP">
+                    <http:request-builder>
+                        <http:query-param paramName="id" value="#[message.inboundProperties.'http.query.params'.id]"/>
+                    </http:request-builder>
+                </http:request>
+            </enricher>
+            <json:object-to-json-transformer doc:name="Object to JSON"/>
+            <logger message="#[payload]" level="INFO" doc:name="Logger"/>
+        </foreach>
+    </flow>
+    <flow name="project2Flow1">
+        <http:listener config-ref="HTTP_Listener_Configuration2" path="/test" doc:name="HTTP"/>
+        <dw:transform-message doc:name="Transform Message">
+            <dw:input-inbound-property doc:sample="sample_data\map_string_string.dwl" propertyName="http.query.params"/>
+            <dw:set-payload><![CDATA[%dw 1.0
+%output application/xml
+%var fileData =readUrl("classpath://bookfile/book.xml","application/xml")
+---
+cataloge:{
+	(
+		(
+		fileData.catalog.*book  map {
+			book:{
+				id:$.@id,
+				author:$.author,
+				title:$.title,
+				genre:$.genre,
+				price:$.price,
+				descrpition:$.descripition
+			}
+		}
+	) filter  $.book.id==inboundProperties."http.query.params".id
+		
+	)
+}]]></dw:set-payload>
+        </dw:transform-message>
+    </flow>
+</mule>
